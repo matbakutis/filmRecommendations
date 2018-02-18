@@ -9,9 +9,12 @@ const { PORT=3000, NODE_ENV='development', DB_PATH='./db/database.db' } = proces
 // Establish connection with db
 const sequelize = new Sequelize('database', 'username', 'password', {
   host: 'localhost',
-  port: 3000,
+  port: PORT,
   dialect: 'sqlite',
-  storage: process.env.DB_PATH
+  storage: DB_PATH,
+  define: {
+    timestamps: false
+  }
 });
 
 // Test connection with db
@@ -23,6 +26,49 @@ sequelize
   .catch(function (err) {
     console.log('Unable to connect to the database:', err);
   });
+
+// Models
+const Genre = sequelize.define('genres', {
+  id: { type: Sequelize.INTEGER, primaryKey: true },
+  name: { type: Sequelize.STRING }
+});
+
+const Film = sequelize.define('films', {
+  id: { type: Sequelize.INTEGER, primaryKey: true },
+  title: { type: Sequelize.STRING },
+  release_date: { type: Sequelize.STRING },
+  tagline: { type: Sequelize.STRING },
+  revenue: { type: Sequelize.INTEGER },
+  budget: { type: Sequelize.INTEGER },
+  runtime: { type: Sequelize.INTEGER },
+  original_language: { type: Sequelize.STRING },
+  status: { type: Sequelize.STRING },
+  genre_id: { type: Sequelize.INTEGER }
+});
+
+const ArtistFilm = sequelize.define('artist_films', {
+  id: { type: Sequelize.INTEGER, primaryKey: true },
+  credit_type: { type: Sequelize.STRING },
+  role: { type: Sequelize.STRING },
+  description: { type: Sequelize.STRING },
+  artist_id: { type: Sequelize.INTEGER },
+  film_id: { type: Sequelize.INTEGER }
+});
+
+const Artist = sequelize.define('artists', {
+  id: { type: Sequelize.INTEGER, primaryKey: true },
+  name: { type: Sequelize.STRING },
+  birthday: { type: Sequelize.STRING },
+  deathday: { type: Sequelize.STRING },
+  gender: { type: Sequelize.INTEGER },
+  place_of_birth: { type: Sequelize.STRING }
+});
+
+
+// Sync Models
+sequelize.sync().then(function (){
+  Genre.findAll().then(function(film){console.log(film, PORT)});
+});
 
 // START SERVER
 Promise.resolve()
