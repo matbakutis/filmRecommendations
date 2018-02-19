@@ -78,13 +78,55 @@ app.get('/films/:id/recommendations', getFilmRecommendations);
 // ROUTE HANDLER
 function getFilmRecommendations(req, res) {
   const id = parseInt(req.params.id);
+  const offset = req.query.offset || 1;
+  const limit = req.query.limit || 10;
+  const finalResult = {
+    recommendations: [],
+    meta: {
+      limit: limit,
+      offset: offset
+    }
+  };
+  if (limit < 1 || offset < 0 || typeof limit != 'number' || typeof offset != 'number') {
+    res.status(422).send('Incorrect Limit or Offset queries.')
+  }
   Film.findById(id).then(function(requestedFilm){
     if (requestedFilm) {
-      res.send(requestedFilm);
+      Film.findAndCountAll({ where: { genre_id: requestedFilm.genre_id }} ).then(function(relatedFilms) {
+        let filmCounter = 0;
+        for (let i = 0; i < relatedFilms.rows.length; i++) {
+          request('http://credentials-api.generalassemb.ly/4576f55f-c427-4cfc-a11c-5bfe914ca6c1?films=' + relatedFilms.rows[i].id, function (error, response, body) {
+            const jsonBody = JSON.parse(body);
+            filmCounter++;
+            console.log(filmCounter, relatedFilms.rows.length);
+            if (jsonBody[0].reviews.length > 5) {
+              let totalRating = 0;
+              for (let j = 0; j < jsonBody[0].reviews.length; j++) {
+                totalRating += jsonBody[0].reviews[j].rating;
+              };
+              if (totalRating / jsonBody[0].reviews.length > 4) {
+                finalResult.recommendations.push({
+                  id: relatedFilms.rows[i].id,
+                  title: relatedFilms.rows[i].title,
+                  releaseDate: relatedFilms.rows[i].release_date,
+                  genre: relatedFilms.rows[i].genre_id,
+                  averageRating: totalRating / jsonBody[0].reviews.length,
+                  reviews: jsonBody[0].reviews.length
+                });
+              };
+            };
+            if (finalResult.recommendations.length === limit || filmCounter === relatedFilms.rows.length) {
+              res.send(finalResult);
+            };
+          });
+        };
+      });
     }else {
       res.status(404).send('That film could not be found.');
-    }
+    };
   });
 };
 
 module.exports = app;
+
+
