@@ -64,11 +64,8 @@ const Artist = sequelize.define('artists', {
   place_of_birth: { type: Sequelize.STRING }
 });
 
-
 // Sync Models
-sequelize.sync().then(function (){
-  Genre.findAll().then(function(film){console.log(film, PORT)});
-});
+sequelize.sync();
 
 // START SERVER
 Promise.resolve()
@@ -80,7 +77,14 @@ app.get('/films/:id/recommendations', getFilmRecommendations);
 
 // ROUTE HANDLER
 function getFilmRecommendations(req, res) {
-  res.status(500).send('Not Implemented');
-}
+  const id = parseInt(req.params.id);
+  Film.findById(id).then(function(requestedFilm){
+    if (requestedFilm) {
+      res.send(requestedFilm);
+    }else {
+      res.status(404).send('That film could not be found.');
+    }
+  });
+};
 
 module.exports = app;
