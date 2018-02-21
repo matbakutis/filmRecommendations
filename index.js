@@ -130,48 +130,52 @@ function getFilmRecommendations(req, res) {
       offset: offset
     }
   };
-  if (limit < 1 || offset < 0 || typeof limit != 'number' || typeof offset != 'number') {
+  // Check wether the queries and ID are valid
+  if (limit < 1 || offset < 0 || (isNaN(parseInt(req.query.limit)) && req.query.limit) || (isNaN(parseInt(req.query.offset)) && req.query.offset)) {
     res.status(422).json({ message: 'Incorrect Limit or Offset queries.' });
-  };
-  if (!id) {
+  }else if (!id) {
     res.status(422).json({ message: 'Incorrect Film ID.' });
   }else {
+    // Find the requested film
     Film.findById(id).then(function(requestedFilm){
       if (requestedFilm) {
         // Find all films in the same genre
-        Film.findAndCountAll({ where: { genre_id: requestedFilm.genre_id } } ).then(function(relatedFilms) {
-          let filmCounter = 0;
-          for (let i = 0; i < relatedFilms.rows.length; i++) {
-            // Request reviews for each related film
-            request('http://credentials-api.generalassemb.ly/4576f55f-c427-4cfc-a11c-5bfe914ca6c1?films=' + relatedFilms.rows[i].id, function (error, response, body) {
-              const jsonBody = JSON.parse(body);
-              filmCounter++;
-              if (jsonBody[0].reviews.length >= 5) {
+        Film.findAll({ where: { genre_id: requestedFilm.genre_id } } ).then(function(relatedFilms) {
+          let filmIDs = '';
+          relatedFilms.forEach(function (relatedFilm) {
+            filmIDs += relatedFilm.id + ',';
+          });
+          // Request reviews for each related film
+          request('http://credentials-api.generalassemb.ly/4576f55f-c427-4cfc-a11c-5bfe914ca6c1?films=' + filmIDs, function (error, response, body) {
+            const reviewsBody = JSON.parse(body);
+            for (let i = 0; i < reviewsBody.length; i++) {
+              if (reviewsBody[i].reviews.length >= 5) {
                 let totalRating = 0;
-                for (let j = 0; j < jsonBody[0].reviews.length; j++) {
-                  totalRating += jsonBody[0].reviews[j].rating;
+                for (let j = 0; j < reviewsBody[i].reviews.length; j++) {
+                  totalRating += reviewsBody[i].reviews[j].rating;
                 };
                 // Only accept recommendation if rating is above 4 and its within the year range
-                if (totalRating / jsonBody[0].reviews.length >= 4 && parseInt(relatedFilms.rows[i].release_date) >= parseInt(requestedFilm.release_date) - 15 && parseInt(relatedFilms.rows[i].release_date) <= parseInt(requestedFilm.release_date) + 15) {
-                  recommendationsArray.push({
-                    id: relatedFilms.rows[i].id,
-                    title: relatedFilms.rows[i].title,
-                    releaseDate: relatedFilms.rows[i].release_date,
-                    genre: findGenre(relatedFilms.rows[i].genre_id),
-                    averageRating: parseFloat(totalRating / jsonBody[0].reviews.length).toFixed(2),
-                    reviews: jsonBody[0].reviews.length
-                  });
+                if (totalRating / reviewsBody[i].reviews.length >= 4) {           
+                  const relatedFilmIndex = relatedFilms.map(function(x) {return x.id; }).indexOf(reviewsBody[i].film_id);
+                  if (parseInt(relatedFilms[relatedFilmIndex].release_date) >= parseInt(requestedFilm.release_date) - 15 && parseInt(relatedFilms[relatedFilmIndex].release_date) <= parseInt(requestedFilm.release_date) + 15) {
+                    recommendationsArray.push({
+                      id: relatedFilms[relatedFilmIndex].id,
+                      title: relatedFilms[relatedFilmIndex].title,
+                      releaseDate: relatedFilms[relatedFilmIndex].release_date,
+                      genre: findGenre(relatedFilms[relatedFilmIndex].genre_id),
+                      averageRating: parseFloat(totalRating / reviewsBody[i].reviews.length).toFixed(2),
+                      reviews: reviewsBody[i].reviews.length
+                    });
+                  };
                 };
               };
-              // Send final results once all potential films have been checked
-              if (filmCounter === relatedFilms.rows.length) {
-                finalResult.recommendations = recommendationsArray.slice(offset, offset + limit).sort(function(a, b) {
-                  return a.id - b.id;
-                });
-                res.json(finalResult);
-              };
+            };
+            // Send final results once all potential films have been checked
+            finalResult.recommendations = recommendationsArray.slice(offset, offset + limit).sort(function(a, b) {
+              return a.id - b.id;
             });
-          };
+            res.json(finalResult);
+          });
         });
       }else {
         res.status(422).json({ message: 'That film could not be found.' });
@@ -186,5 +190,3 @@ app.get('*', function(req, res){
 });
 
 module.exports = app;
-
-
